@@ -10,6 +10,7 @@ class ActorGraph:
         tmdb.REQUESTS_TIMEOUT = (2, 5)  # seconds, for connect and read specifically 
         tmdb.REQUESTS_SESSION = requests.Session()
         self.graph = pickle.load(open("tmdb_graph.pickle", "rb"))
+        self.added_movies = pickle.load(open("checked_movies.pickle", "rb"))
 
     def add_movie_connection(self, actor1, actor2, movie):
         # Check if the edge already exists
@@ -29,16 +30,22 @@ class ActorGraph:
         
         # Create an empty graph
         self.graph = nx.Graph()
+        self.added_movies = set()
 
         movies_data = tmdb.Movies()
         movie_dict = dict()
 
         for movie in movies_data.popular()['results']:
-            if movie['id'] in movie_dict:
+            if movie['id'] in movie_dict or movie['id'] in self.added_movies:
                 continue
+
+            self.added_movies.add(movie['id'])
 
             movie_item = tmdb.Movies(movie['id'])
             movie_item.info()
+
+            if {'id': 99, 'name': 'Documentary'} in movie_item.genres:
+                continue
 
             movie_dict[movie['id']] = set([actor['id'] for actor in movie_item.credits()['cast']])
 
@@ -49,19 +56,35 @@ class ActorGraph:
                     self.add_movie_connection(actor, co_actor, movie)
         
         pickle.dump(self.graph, open("tmdb_graph.pickle", "wb"))
+        pickle.dump(self.added_movies, open("checked_movies.pickle", "wb"))
 
-    # Takes in 2 lists of movie IDs to update the graph
-    def _update_graph(self, id_set, actor1, actor2):
+        # Takes in 2 lists of movie IDs to update the graph
+    def _update_actor(self, actor):
+        print(f"Initial number of nodes and edges and movie set size: {self.graph.number_of_nodes()} and {self.graph.number_of_edges()} and {len(self.added_movies)}")
+        search = tmdb.Search()
+
+        search.person(query=actor)
+
+        actor_item = tmdb.People(search.results[0]['id'])
+
+        actor_item.info()
+
+        movie_ids = set([movie['id'] for movie in actor_item.movie_credits()['cast']])
         movie_dict = dict()
 
         # Find the cast of every movie
-        for movie in id_set:
-            if movie in movie_dict:
+        for movie in movie_ids:
+            if movie in movie_dict or movie in self.added_movies:
                 continue
+
+            self.added_movies.add(movie)
 
             movie_item = tmdb.Movies(movie)
             movie_item.info()
 
+            if {'id': 99, 'name': 'Documentary'} in movie_item.genres:
+                continue
+            
             movie_dict[movie] = set([actor['id'] for actor in movie_item.credits()['cast']])
 
         actor_set = set()
@@ -74,13 +97,46 @@ class ActorGraph:
                     self.add_movie_connection(actor, co_actor, movie)
 
         pickle.dump(self.graph, open("tmdb_graph.pickle", "wb"))
+        pickle.dump(self.added_movies, open("checked_movies.pickle", "wb"))
+        print(f"Initial number of nodes and edges and movie set size: {self.graph.number_of_nodes()} and {self.graph.number_of_edges()} and {len(self.added_movies)}")
+
+    # Takes in 2 lists of movie IDs to update the graph
+    def _update_graph(self, id_set, actor1, actor2):
+        movie_dict = dict()
+
+        # Find the cast of every movie
+        for movie in id_set:
+            if movie in movie_dict or movie in self.added_movies:
+                continue
+
+            self.added_movies.add(movie)
+
+            movie_item = tmdb.Movies(movie)
+            movie_item.info()
+
+            if {'id': 99, 'name': 'Documentary'} in movie_item.genres:
+                continue
+            
+            movie_dict[movie] = set([actor['id'] for actor in movie_item.credits()['cast']])
+
+        actor_set = set()
+
+        # Add nodes and edges
+        for movie, actors in movie_dict.items():
+            actor_set.update(set(actors))
+            for actor in actors:
+                for co_actor in actors:
+                    self.add_movie_connection(actor, co_actor, movie)
+
+        pickle.dump(self.graph, open("tmdb_graph.pickle", "wb"))
+        pickle.dump(self.added_movies, open("checked_movies.pickle", "wb"))
         if nx.has_path(self.graph, actor1, actor2):
             return []
         
         new_movie_set = set()
 
         # Compile every movie each actor has been in
-        for actor in actor_set():
+        for actor in actor_set:
             actor_item = tmdb.People(actor)
             actor_item.info()
 
@@ -114,17 +170,26 @@ class ActorGraph:
             movie_ids = self._update_graph(movie_ids, actor1_item.id, actor2_item.id)
             update_count += 1
             print("Added both actors to the graph")
+            print(f"Updated number of nodes and edges: {self.graph.number_of_nodes()} and {self.graph.number_of_edges()}")
+
+        # Initializes movie IDs if nodes exist but connection between does not
+        elif not(nx.has_path(self.graph, actor1_item.id, actor2_item.id)):
+            movie_ids = set([movie['id'] for movie in actor1_item.movie_credits()['cast']])
+            movie_ids.update(set([movie['id'] for movie in actor2_item.movie_credits()['cast']]))
         
         # Updates if no connection exists
         while not(nx.has_path(self.graph, actor1_item.id, actor2_item.id)) and update_count < 6:
+            print("Didn't connect")
+            break
             movie_ids = self._update_graph(movie_ids, actor1_item.id, actor2_item.id)
             update_count += 1
             print(f"Update count: {update_count}")
+            print(f"Updated number of nodes and edges: {self.graph.number_of_nodes()} and {self.graph.number_of_edges()}")
 
 
         if nx.has_path(self.graph, actor1_item.id, actor2_item.id):
             id_path = nx.shortest_path(self.graph, source=actor1_item.id, target=actor2_item.id)
-            # return path
+
         else:
             print(f"No connection found after {update_count} updates")
             return
@@ -152,6 +217,7 @@ class ActorGraph:
 
             name_path.append(connection_names)
 
+        print(connection_ids)
         for i in name_path:
             print(i)
 
@@ -162,9 +228,19 @@ class ActorGraph:
 def main():
     actorgraph = ActorGraph()
     #actorgraph.regenerate()
-    actor1 = input("Enter the first actor: ")
-    actor2 = input("Enter the second actor: ")
-    actorgraph.find_connection(actor1, actor2)
+    # actor1 = input("Enter the first actor: ")
+    # actor2 = input("Enter the second actor: ")
+    # actorgraph.find_connection(actor1, actor2)
+    actorgraph.find_connection("Brad Pitt", "Sydney Sweeney")
+    actorgraph.find_connection("Jason Statham", "George Clooney")
+    actorgraph.find_connection("Timothée Chalamet", "Robert Downey Jr")
+    actorgraph.find_connection("Kaylah Zander", "Jenna Ortega")
+    actorgraph.find_connection("Dwayne Johnson", "McKenna Roberts")
+    actorgraph.find_connection("Kumail Nanjiani", "Alexandra Daddario")
+    actorgraph.find_connection("Daniel Craig", "Ana de Armas")
+    actorgraph.find_connection("Joaquin Phoenix", "Scarlett Johansson")
+    actorgraph.find_connection("Denzel Washington", "Jacob McCarthy")
+    actorgraph.find_connection("Dustin Hoffman", "Keanu Reeves")
 
 if __name__ == "__main__":
     main()
