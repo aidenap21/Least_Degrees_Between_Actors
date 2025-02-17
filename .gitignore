@@ -1,3 +1,2 @@
 tmdb_api_key.py
-checked_movies.pickle
-tmdb_graph.pickle
+*.pickle
