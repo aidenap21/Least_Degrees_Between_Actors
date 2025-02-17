@@ -196,7 +196,7 @@ class ActorGraph:
             movie_ids.update(set([movie['id'] for movie in actor2_item.movie_credits()['cast']]))
             movie_ids = self._update_graph(movie_ids, actor1_item.id, actor2_item.id)
             update_count += 1
-            print(f"Updated number of nodes and edges: {self._graph.number_of_nodes()} and {self._graph.number_of_edges()}")
+            # print(f"Updated number of nodes and edges: {self._graph.number_of_nodes()} and {self._graph.number_of_edges()}")
 
         # Initializes movie IDs if nodes exist but connection between does not
         elif not(nx.has_path(self._graph, actor1_item.id, actor2_item.id)):
@@ -242,7 +242,6 @@ class ActorGraph:
 
             name_path.append(connection_names)
 
-            print(connection_ids)
         for i in name_path:
             print(i)        
         
