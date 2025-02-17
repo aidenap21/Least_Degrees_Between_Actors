@@ -1,5 +1,6 @@
 # Least Degrees Between Actors
 =======================
+
 Graph Setup
 ------------
 To run the program, an API key from TMDB must first be obtained. After getting the key and storing it in a Python file with the name of `tmdb_api_key.py` and a single variable in the file called `api_key` with its value being the string of the API key.
@@ -38,6 +39,6 @@ Michael Greene
 ['Less Than Zero']
 Brad Pitt
 ```
-Charlie Chaplin is in *Modern Times* and *The Great Dictator* with Harry Wilson, who is in *The Cincinnati Kid* with Michael Greene, who is finally in *Less Than Zero* with Brad Pitt. Four of those roles are actually "uncredited" to the actors, but the data is stored in TMDB so a path is still there to connect them.
+Charlie Chaplin is in *Modern Times* and *The Great Dictator* with Harry Wilson, who is in *The Cincinnati Kid* with Michael Greene, who is finally in *Less Than Zero* with Brad Pitt. Five of those roles are actually "uncredited" to the actors, but the data is stored in TMDB so a path is still there to connect them.
 
 Each time an actor is entered the model fetches from TMDB to update the actors' connections to increase the chance of a shorter path being found either now or in the future.
